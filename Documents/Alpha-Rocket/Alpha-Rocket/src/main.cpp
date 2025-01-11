@@ -7,6 +7,10 @@
 #include <Adafruit_LSM6DSO32.h> //low accel and gyro
 #include <Adafruit_DPS310.h> //pressure
 
+#define G 9.80665
+
+void deployChute();
+
 Adafruit_DPS310 baro;
 Adafruit_LSM6DSO32 gyro;
 Adafruit_ADXL375 accel = Adafruit_ADXL375(12345);
@@ -54,6 +58,8 @@ void setup(void)
   baro.configurePressure(DPS310_64HZ, DPS310_64SAMPLES);
   baro.configureTemperature(DPS310_64HZ, DPS310_64SAMPLES);
 
+  // gyro.highPassFilter(true, 12); //might be needed
+
   Serial.println("\nInit success\n");
   digitalWrite(statusLED, HIGH);
 
@@ -67,6 +73,22 @@ void loop(void)
   accel.getEvent(&HA_accel);
   gyro.getEvent(&linearaccel, &angleaccel, &temp);
   baro.getEvents(&temp_event, &pressure_event);
+
+  /*abort logic*/
+  if(
+    linearaccel.acceleration.x > 10 || linearaccel.acceleration.z > 10
+  ){
+    deployChute();
+  }
+
+  /*we do a bit of trig*/
+
+  // Serial.print(">X angle:");
+  // Serial.print(linearaccel.acceleration.);
+  // Serial.print("deg\n");
+
+
+  /*prints*/
 
   Serial.print(">Gyro Temp:");
   Serial.print(temp.temperature);
@@ -121,4 +143,8 @@ void loop(void)
   Serial.print("C\n");
 
   delay(50);
+}
+
+void deployChute(){
+
 }
