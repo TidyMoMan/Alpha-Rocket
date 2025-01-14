@@ -1,13 +1,15 @@
-//Alpha Rocket Avi Firmware Version 0.1.1
+//Alpha Rocket Avi Firmware Version 0.1.2
 
 #include <Arduino.h>
 #include <Wire.h>
+#include <SPI.h>
+#include <SD.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_ADXL375.h> //high accel
 #include <Adafruit_LSM6DSO32.h> //low accel and gyro
 #include <Adafruit_DPS310.h> //pressure
 
-#define G 9.80665
+#define G 9.80665 //Gee
 
 void deployChute();
 
@@ -15,7 +17,18 @@ Adafruit_DPS310 baro;
 Adafruit_LSM6DSO32 gyro;
 Adafruit_ADXL375 accel = Adafruit_ADXL375(12345);
 
+File logfile;
+
 int statusLED = 14;
+int SDpin = 10;
+int flightPhase = 0; 
+/*0 = on pad
+  1 = powered flight
+  2 = coasting
+  3 = descent (hopefully this is when the parachute opens...)
+  4 = landed.*/
+
+int isChuteOpen = 0;
 
 void setup(void)
 {
@@ -47,7 +60,7 @@ void setup(void)
     }
   }
 
-  //max it out baby!
+  /*max it out baby!*/
   gyro.setAccelDataRate(LSM6DS_RATE_6_66K_HZ);
   gyro.setGyroDataRate(LSM6DS_RATE_6_66K_HZ);
   gyro.setAccelRange(LSM6DSO32_ACCEL_RANGE_8_G); //options are 4, 8, 16, and 32.t 
@@ -60,6 +73,19 @@ void setup(void)
 
   // gyro.highPassFilter(true, 12); //might be needed
 
+  /*SD stuff*/
+  if(!SD.begin(SDpin)){
+    while(1){
+      Serial.println("Failed to find SD card\n");
+      delay(1000);
+    }
+  }
+  
+  //begin the log
+  logfile = SD.open("log", FILE_WRITE);
+  logfile.println("Init success");
+  logfile.close();
+
   Serial.println("\nInit success\n");
   digitalWrite(statusLED, HIGH);
 
@@ -67,7 +93,6 @@ void setup(void)
 
 void loop(void)
 {
-  
   sensors_event_t linearaccel, angleaccel, temp, HA_accel, temp_event, pressure_event;
 
   accel.getEvent(&HA_accel);
@@ -76,17 +101,22 @@ void loop(void)
 
   /*abort logic*/
   if(
-    linearaccel.acceleration.x > 10 || linearaccel.acceleration.z > 10
+    linearaccel.acceleration.x > 10 || linearaccel.acceleration.z > 10 || flightPhase == 3
   ){
     deployChute();
   }
+
+  /*flight phase logic*/
+  if((linearaccel.acceleration.y > 20 && HA_accel.acceleration.y > 20) && flightPhase == 0){flightPhase = 1;} //takeoff detection
+  if((linearaccel.acceleration.y > 20 && HA_accel.acceleration.y > 20) && flightPhase == 1){flightPhase = 2;} //coast detection
+  if(false){flightPhase = 3;} //descent detection
+  if(false){flightPhase = 4;} //landing detection
 
   /*we do a bit of trig*/
 
   // Serial.print(">X angle:");
   // Serial.print(linearaccel.acceleration.);
   // Serial.print("deg\n");
-
 
   /*prints*/
 
@@ -146,5 +176,10 @@ void loop(void)
 }
 
 void deployChute(){
+  isChuteOpen = 1;
+  digitalWrite(statusLED, LOW);
 
+  if(isChuteOpen){
+    //servo logic here
+  }
 }
