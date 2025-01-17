@@ -9,8 +9,15 @@
 #include <Adafruit_LSM6DSO32.h> //low accel and gyro
 #include <Adafruit_DPS310.h> //pressure
 
-#define G 9.80665 //Gee
+//all thresholds are m/s^2
+#define G 9.80665
+#define TAKEOFF_THRESHOLD 20
+#define COAST_THRESHOLD 10
+#define DESCENT_THRESHOLD 0
 
+#define ABORT_THRESHOLD 10
+
+float kalmanAlt();
 void deployChute();
 
 Adafruit_DPS310 baro;
@@ -18,6 +25,8 @@ Adafruit_LSM6DSO32 gyro;
 Adafruit_ADXL375 accel = Adafruit_ADXL375(12345);
 
 File logfile;
+
+float initialAlt;
 
 int statusLED = 14;
 int SDpin = 10;
@@ -70,21 +79,22 @@ void setup(void)
 
   baro.configurePressure(DPS310_64HZ, DPS310_64SAMPLES);
   baro.configureTemperature(DPS310_64HZ, DPS310_64SAMPLES);
+  initialAlt = baro.readAltitude();
 
   // gyro.highPassFilter(true, 12); //might be needed
 
   /*SD stuff*/
-  if(!SD.begin(SDpin)){
-    while(1){
-      Serial.println("Failed to find SD card\n");
-      delay(1000);
-    }
-  }
+  // if(!SD.begin(SDpin)){
+  //   while(1){
+  //     Serial.println("Failed to find SD card\n");
+  //     delay(1000);
+  //   }
+  // }
   
-  //begin the log
-  logfile = SD.open("log", FILE_WRITE);
-  logfile.println("Init success");
-  logfile.close();
+  // //begin the log
+  // logfile = SD.open("log", FILE_WRITE);
+  // logfile.println("Init success");
+  // logfile.close();
 
   Serial.println("\nInit success\n");
   digitalWrite(statusLED, HIGH);
@@ -100,17 +110,15 @@ void loop(void)
   baro.getEvents(&temp_event, &pressure_event);
 
   /*abort logic*/
-  if(
-    linearaccel.acceleration.x > 10 || linearaccel.acceleration.z > 10 || flightPhase == 3
-  ){
+  if(flightPhase == 3 || (abs(HA_accel.acceleration.x) > ABORT_THRESHOLD || abs(HA_accel.acceleration.z) > ABORT_THRESHOLD) || (abs(linearaccel.acceleration.x) > ABORT_THRESHOLD || abs(linearaccel.acceleration.z) > ABORT_THRESHOLD)){
     deployChute();
   }
 
   /*flight phase logic*/
-  if((linearaccel.acceleration.y > 20 && HA_accel.acceleration.y > 20) && flightPhase == 0){flightPhase = 1;} //takeoff detection
-  if((linearaccel.acceleration.y > 20 && HA_accel.acceleration.y > 20) && flightPhase == 1){flightPhase = 2;} //coast detection
-  if(false){flightPhase = 3;} //descent detection
-  if(false){flightPhase = 4;} //landing detection
+  if((linearaccel.acceleration.y > TAKEOFF_THRESHOLD && HA_accel.acceleration.y > TAKEOFF_THRESHOLD) && flightPhase == 0){flightPhase = 1;} //takeoff detection
+  if((linearaccel.acceleration.y > COAST_THRESHOLD && HA_accel.acceleration.y > COAST_THRESHOLD) && flightPhase == 1){flightPhase = 2;} //coast detection
+  if((linearaccel.acceleration.y > DESCENT_THRESHOLD && HA_accel.acceleration.y > DESCENT_THRESHOLD) && flightPhase == 2){flightPhase = 3;} //descent detection
+  //if(false){flightPhase = 4;} //landing detection
 
   /*we do a bit of trig*/
 
@@ -119,6 +127,9 @@ void loop(void)
   // Serial.print("deg\n");
 
   /*prints*/
+  Serial.print(">Flight Phase:");
+  Serial.print(flightPhase);
+  Serial.print("\n");
 
   Serial.print(">Gyro Temp:");
   Serial.print(temp.temperature);
@@ -171,15 +182,20 @@ void loop(void)
   Serial.print(">Baro Temp:");
   Serial.print(temp_event.temperature);
   Serial.print("C\n");
-
+  
   delay(50);
+}
+
+float kalmanAlt(){
+  //calculus here... eventually
+  return baro.readAltitude() - initialAlt;
 }
 
 void deployChute(){
   isChuteOpen = 1;
   digitalWrite(statusLED, LOW);
 
-  if(isChuteOpen){
+  if(!isChuteOpen){ //if the chute is not open...
     //servo logic here
   }
 }
