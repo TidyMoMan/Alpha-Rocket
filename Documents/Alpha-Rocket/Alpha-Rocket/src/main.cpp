@@ -14,8 +14,7 @@
 #define TAKEOFF_THRESHOLD 20
 #define COAST_THRESHOLD 10
 #define DESCENT_THRESHOLD 0
-
-#define ABORT_THRESHOLD 10
+#define ABORT_THRESHOLD 10 //non-spinal accel
 
 float kalmanAlt();
 void deployChute();
@@ -30,6 +29,7 @@ float initialAlt;
 
 int statusLED = 14;
 int flightPhase = 0; 
+int chipSelect = 17;
 /*0 = on pad
   1 = powered flight
   2 = coasting
@@ -46,28 +46,24 @@ void setup(void)
   pinMode(statusLED, OUTPUT);
   digitalWrite(statusLED, LOW);
 
-  if(!gyro.begin_I2C()) {
-    while(1){
-      Serial.println("Failed to find gyro\n");
-      delay(1000);
-    }
+  /*hold init until all sensors have been found on the bus*/
+  while(!gyro.begin_I2C()){
+    Serial.println("Failed to find gyro\n");
+    delay(1000);
   }
+  Serial.println("found gyro\n");
 
-  if(!accel.begin())
-  {
-    while(1){
-      Serial.println("Failed to find accelerometer\n");
-      delay(1000);
-    }
+  while(!accel.begin()){
+    Serial.println("Failed to find accelerometer\n");
+    delay(1000);
   }
+  Serial.println("found accelerometer\n");
 
-  if(!baro.begin_I2C()){
-      while(1){
-      Serial.println("Failed to find barometer\n");
-      
-      delay(1000);
-    }
+  while(!baro.begin_I2C()){
+    Serial.println("Failed to find barometer\n");
+    delay(1000);
   }
+  Serial.println("found barometer\n");
 
   /*max it out baby!*/
   gyro.setAccelDataRate(LSM6DS_RATE_6_66K_HZ);
@@ -84,12 +80,10 @@ void setup(void)
   // gyro.highPassFilter(true, 12); //might be needed
 
   /*SD stuff*/
-
-    while(!SD.begin()){
-      Serial.println("Failed to find SD card\n");
-      delay(1000);
-    }
-  
+  while(!SD.begin(chipSelect)){
+    Serial.println("Failed to find SD card\n");
+    delay(1000);
+  }
   
   //begin the log
   logfile = SD.open("log", FILE_WRITE);
@@ -183,7 +177,7 @@ void loop(void)
   Serial.print(temp_event.temperature);
   Serial.print("C\n");
   
-  delay(50);
+  delay(50); //don't forget to remove this
 }
 
 float kalmanAlt(){
