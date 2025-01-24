@@ -29,7 +29,6 @@ File logfile;
 float initialAlt;
 
 int statusLED = 14;
-int SDpin = 10;
 int flightPhase = 0; 
 /*0 = on pad
   1 = powered flight
@@ -65,6 +64,7 @@ void setup(void)
   if(!baro.begin_I2C()){
       while(1){
       Serial.println("Failed to find barometer\n");
+      
       delay(1000);
     }
   }
@@ -72,7 +72,7 @@ void setup(void)
   /*max it out baby!*/
   gyro.setAccelDataRate(LSM6DS_RATE_6_66K_HZ);
   gyro.setGyroDataRate(LSM6DS_RATE_6_66K_HZ);
-  gyro.setAccelRange(LSM6DSO32_ACCEL_RANGE_8_G); //options are 4, 8, 16, and 32.t 
+  gyro.setAccelRange(LSM6DSO32_ACCEL_RANGE_8_G); //options are 4, 8, 16, and 32.t
   gyro.setGyroRange(LSM6DS_GYRO_RANGE_2000_DPS);
 
   accel.setDataRate(ADXL343_DATARATE_3200_HZ);
@@ -84,17 +84,17 @@ void setup(void)
   // gyro.highPassFilter(true, 12); //might be needed
 
   /*SD stuff*/
-  // if(!SD.begin(SDpin)){
-  //   while(1){
-  //     Serial.println("Failed to find SD card\n");
-  //     delay(1000);
-  //   }
-  // }
+
+    while(!SD.begin()){
+      Serial.println("Failed to find SD card\n");
+      delay(1000);
+    }
   
-  // //begin the log
-  // logfile = SD.open("log", FILE_WRITE);
-  // logfile.println("Init success");
-  // logfile.close();
+  
+  //begin the log
+  logfile = SD.open("log", FILE_WRITE);
+  logfile.println("Init success");
+  logfile.close();
 
   Serial.println("\nInit success\n");
   digitalWrite(statusLED, HIGH);
