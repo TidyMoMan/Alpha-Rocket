@@ -25,9 +25,11 @@ Adafruit_ADXL375 accel = Adafruit_ADXL375(12345);
 
 float initialAlt;
 
+int buzzer = 15;
 int statusLED = 14;
-int flightPhase = 0; 
 int chipSelect = 17;
+
+int flightPhase = 0; 
 /*0 = on pad
   1 = powered flight
   2 = coasting
