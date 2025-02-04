@@ -23,7 +23,10 @@
 #define FREQ 50 //servo frequency in HZ
 #define SERVO_OPEN_POS 10
 #define SERVO_CLOSED_POS 50
-int servoState = SERVO_CLOSED_POS;
+
+#define BUZZER_PIN 3
+#define STATUS_LED_PIN 14
+#define SD_CS_PIN 17 //SD module chip select
 
 #define DEBUG 1 //1 means debug mode is ON
 
@@ -33,13 +36,11 @@ void deployChute();
 Adafruit_DPS310 baro;
 Adafruit_LSM6DSO32 gyro;
 Adafruit_ADXL375 accel = Adafruit_ADXL375(12345);
-RP2040_PWM* PWM_Instance;
+RP2040_PWM* ServoPWM;
+RP2040_PWM* BuzzerPWM;
 
 float initialAlt;
-
-int buzzer = 15;
-int statusLED = 14;
-int chipSelect = 17;
+int servoState = SERVO_CLOSED_POS;
 
 int flightPhase = 0; 
 /*0 = on pad
@@ -53,12 +54,12 @@ void setup(void)
   Serial.begin(115200);
   Serial.println("Begin init\n");
 
-  pinMode(statusLED, OUTPUT);
-  pinMode(buzzer, OUTPUT);
-  digitalWrite(statusLED, LOW);
+  pinMode(STATUS_LED_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(STATUS_LED_PIN, LOW);
 
-  PWM_Instance = new RP2040_PWM(SERVO_PIN, FREQ, servoState);
-
+  ServoPWM = new RP2040_PWM(SERVO_PIN, FREQ, servoState);
+  BuzzerPWM = new RP2040_PWM(BUZZER_PIN, 1, 0);
 
   /*hold init until all sensors have been found on the bus*/
   while(!gyro.begin_I2C()){
@@ -94,7 +95,7 @@ void setup(void)
   // gyro.highPassFilter(true, 12); //might be needed
 
   /*SD stuff*/
-  while(!SD.begin(chipSelect)){
+  while(!SD.begin(SD_CS_PIN)){
     Serial.println("Failed to find SD card\n");
     delay(1000);
   }
@@ -104,18 +105,26 @@ void setup(void)
   dataFile.close();
 
   Serial.println("\nInit success\n");
-  digitalWrite(statusLED, HIGH);
+  //startup sounds are fun
+  BuzzerPWM->setPWM(BUZZER_PIN, 750, 50);
+  delay(100);
+  BuzzerPWM->setPWM(BUZZER_PIN, 950, 50);
+  delay(100);
+  BuzzerPWM->setPWM(BUZZER_PIN, 1150, 50);
+  delay(400);
+  BuzzerPWM->setPWM(BUZZER_PIN, 1150, 0);
+
+  digitalWrite(STATUS_LED_PIN, HIGH);
 
 }
 int count = 0;
 int isOn = 1;
 void loop(void)
 {
-  tone(buzzer, 50);
 
-  PWM_Instance->setPWM(SERVO_PIN, FREQ, servoState);
+  ServoPWM->setPWM(SERVO_PIN, FREQ, servoState);
 
-  if(count > 50 ){count = 0; isOn = !isOn; if(isOn){digitalWrite(statusLED, LOW);}else{digitalWrite(statusLED, HIGH);}}
+  if(count > 50 ){count = 0; isOn = !isOn; if(isOn){digitalWrite(STATUS_LED_PIN, LOW); BuzzerPWM->setPWM(BUZZER_PIN, 900, 50);}else{digitalWrite(STATUS_LED_PIN, HIGH); BuzzerPWM->setPWM(BUZZER_PIN, 1150, 75);}}
   count++;
 
   sensors_event_t linearaccel, angleaccel, temp, HA_accel, temp_event, pressure_event;
@@ -137,6 +146,7 @@ void loop(void)
 
   /*logging, much room for improvement here*/
   if(!DEBUG){
+
   File dataFile = SD.open("datalog.txt", FILE_WRITE);
 
   //timestamp
