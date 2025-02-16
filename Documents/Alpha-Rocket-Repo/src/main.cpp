@@ -21,7 +21,7 @@
 #define _PWM_LOGLEVEL_ 3
 #define SERVO_PIN 15
 #define FREQ 200 //servo frequency in HZ
-#define SERVO_OPEN_POS 33
+#define SERVO_OPEN_POS 34
 #define SERVO_CLOSED_POS 10
 
 #define BUZZER_PIN 3
@@ -50,9 +50,7 @@ vehicleState currentState;
 
 float initialAlt;
 
-int chuteDeployed = 0;
-
-int flightPhase = 0; 
+int flightPhase = 2;
 /*0 = on pad
   1 = powered flight
   2 = coasting
@@ -61,6 +59,8 @@ int flightPhase = 0;
 
 unsigned long current = 0;
 unsigned long last = 0;
+int chuteTimeout = 0;
+int triggerCount = 0;
 
 void setup(void)
 {
@@ -246,7 +246,6 @@ void loop(void)
   Serial.print(temp_event.temperature);
   Serial.print("C\n");
 
-
   // Serial.print(">Estimated X pos:");
   // Serial.print(currentState.pos[0]);
   // Serial.print("M\n");
@@ -286,8 +285,15 @@ float kalmanAlt(){
 }
 
 void deployChute(){
-  if(!chuteDeployed){
-    chuteDeployed = 1; //yep, it's been deployed
-    ServoPWM->setPWM(SERVO_PIN, FREQ, SERVO_OPEN_POS);
+  if(triggerCount < 4){ //don't toggle the servo more than 4 times, end with servo in closed position to reduce strain
+    if(chuteTimeout < 50){
+      ServoPWM->setPWM(SERVO_PIN, FREQ, SERVO_OPEN_POS);
+    }else if(chuteTimeout > 50 && chuteTimeout != 100){
+      ServoPWM->setPWM(SERVO_PIN, FREQ, SERVO_CLOSED_POS);
+    }else if(chuteTimeout == 100){
+      chuteTimeout = 0;
+      triggerCount++;
+    }
+    chuteTimeout++;
   }
 }
