@@ -21,14 +21,14 @@
 #define _PWM_LOGLEVEL_ 3
 #define SERVO_PIN 15
 #define FREQ 200 //servo frequency in HZ
-#define SERVO_OPEN_POS 34
-#define SERVO_CLOSED_POS 10
+#define SERVO_OPEN_POS 20
+#define SERVO_CLOSED_POS 30
 
 #define BUZZER_PIN 3
 #define STATUS_LED_PIN 14
 #define SD_CS_PIN 17 //SD module chip select
 
-#define DEBUG 1 //1 means debug mode is ON
+#define DEBUG 0 //1 means debug mode is ON
 
 void updateState(float, float, float, float);
 float kalmanAlt();
@@ -167,7 +167,8 @@ void loop(void)
   /*logging, much room for improvement here*/
   if(!DEBUG){
 
-  File dataFile = SD.open("datalog.txt", FILE_WRITE);
+  File dataFile = SD.open("datalog.txt", O_CREAT | O_WRITE);
+
 
   //timestamp
   dataFile.print(millis()); dataFile.print(","); 
