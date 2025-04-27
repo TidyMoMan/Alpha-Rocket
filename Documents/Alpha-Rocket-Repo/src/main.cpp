@@ -40,13 +40,24 @@ Adafruit_ADXL375 accel = Adafruit_ADXL375(12345);
 RP2040_PWM* ServoPWM;
 RP2040_PWM* BuzzerPWM;
 
-typedef struct vehicleState{ //i just learned how to do this lol
-  float pos[3];
-  float vel[3];
-  float accel[3];
+typedef struct logFrame{
+  float time;
+
+  float xAccel;
+  float yAccel;
+  float zAccel;
+
+  float xRot;
+  float yRot;
+  float zRot;
+
+  float temp;
+  float press;
+  int phase;
 };
 
-vehicleState currentState;
+logFrame thisFrame;
+logFrame logBuff[101];
 
 float initialAlt;
 
@@ -134,14 +145,13 @@ void setup(void)
   digitalWrite(STATUS_LED_PIN, HIGH);
 
 }
-int count = 0;
+int LEDtimeout = 0;
+int logCount = 0; //determines when to open the logfile for writing
 int isOn = 1;
 void loop(void)
 {
-
-
-  if(count > 50 ){count = 0; isOn = !isOn; if(isOn){digitalWrite(STATUS_LED_PIN, LOW); BuzzerPWM->setPWM(BUZZER_PIN, 900, 0);}else{digitalWrite(STATUS_LED_PIN, HIGH); BuzzerPWM->setPWM(BUZZER_PIN, 1150, 0);}}
-  count++;
+  if(LEDtimeout > 50 ){LEDtimeout = 0; isOn = !isOn; if(isOn){digitalWrite(STATUS_LED_PIN, LOW); BuzzerPWM->setPWM(BUZZER_PIN, 900, 0);}else{digitalWrite(STATUS_LED_PIN, HIGH); BuzzerPWM->setPWM(BUZZER_PIN, 1150, 0);}}
+  LEDtimeout++;
 
   sensors_event_t linearaccel, angleaccel, temp, HA_accel, temp_event, pressure_event;
 
@@ -160,33 +170,61 @@ void loop(void)
   if((linearaccel.acceleration.y < DESCENT_THRESHOLD && HA_accel.acceleration.y < DESCENT_THRESHOLD) && flightPhase == 2){flightPhase = 3;} //descent detection
   //if(false){flightPhase = 4;} //landing detection
 
-  // current = micros();
-  // updateState(linearaccel.acceleration.x, linearaccel.acceleration.y, linearaccel.acceleration.z, (current-last));
-  // last = micros();
-
   /*logging, much room for improvement here*/
   if(!DEBUG){
 
-  File dataFile = SD.open("datalog.txt", O_CREAT | O_WRITE);
+    //File dataFile = SD.open("datalog.txt", O_CREAT | O_WRITE);
 
 
-  //timestamp
-  dataFile.print(millis()); dataFile.print(","); 
+    //timestamp
+    // dataFile.print(millis()); dataFile.print(","); 
 
-  //gyro data
-  dataFile.print(linearaccel.acceleration.x); dataFile.print(",");
-  dataFile.print(linearaccel.acceleration.y); dataFile.print(",");
-  dataFile.print(linearaccel.acceleration.z); dataFile.print(",");
-  dataFile.print(angleaccel.acceleration.x); dataFile.print(",");
-  dataFile.print(angleaccel.acceleration.y); dataFile.print(",");
-  dataFile.print(angleaccel.acceleration.z); dataFile.print(",");
+    // //gyro data
+    // dataFile.print(linearaccel.acceleration.x); dataFile.print(",");
+    // dataFile.print(linearaccel.acceleration.y); dataFile.print(",");
+    // dataFile.print(linearaccel.acceleration.z); dataFile.print(",");
+    // dataFile.print(angleaccel.acceleration.x); dataFile.print(",");
+    // dataFile.print(angleaccel.acceleration.y); dataFile.print(",");
+    // dataFile.print(angleaccel.acceleration.z); dataFile.print(",");
 
-  //misc data
-  dataFile.print(temp_event.temperature); dataFile.print(",");
-  dataFile.print(pressure_event.pressure); dataFile.print(",");
-  dataFile.println(flightPhase);
+    // //misc data
+    // dataFile.print(temp_event.temperature); dataFile.print(",");
+    // dataFile.print(pressure_event.pressure); dataFile.print(",");
+    // dataFile.println(flightPhase);
 
-  dataFile.close();
+    // dataFile.close();
+    
+    thisFrame.time = millis();
+
+    thisFrame.xAccel = linearaccel.acceleration.x;
+    thisFrame.yAccel = linearaccel.acceleration.y;
+    thisFrame.zAccel = linearaccel.acceleration.z;
+
+    thisFrame.xRot = angleaccel.acceleration.x;
+    thisFrame.yRot = angleaccel.acceleration.y;
+    thisFrame.zRot = angleaccel.acceleration.z;
+
+    thisFrame.temp = temp_event.temperature;
+    thisFrame.press = pressure_event.pressure;
+    thisFrame.phase = flightPhase;
+
+    logBuff[logCount] = thisFrame;
+
+    logCount++;
+
+    if(logCount == 100){ //only write to card every 100th loop so we don't need to call file.open and file.close every single loop. this should speed up loops (in theory) because there are less file open and close calls
+      logCount = 0;
+
+      File dataFile = SD.open("datalog.txt", O_CREAT | O_WRITE);
+
+      for(int i = 0; i < 100; i++){
+        thisFrame = logBuff[i];
+        dataFile.write((const uint8_t*)&thisFrame, sizeof(thisFrame));
+      }
+
+      dataFile.close();
+    }
+
   }
 
   /*prints*/
@@ -247,37 +285,8 @@ void loop(void)
   Serial.print(temp_event.temperature);
   Serial.print("C\n");
 
-  // Serial.print(">Estimated X pos:");
-  // Serial.print(currentState.pos[0]);
-  // Serial.print("M\n");
+  }
 
-  // Serial.print(">Estimated Y pos:");
-  // Serial.print(currentState.pos[1]);
-  // Serial.print("M\n");
-
-  // Serial.print(">Estimated Z pos:");
-  // Serial.print(currentState.pos[2]);
-  // Serial.print("M\n");
-
-}
-
-}
-
-void updateState(float accelx, float accely, float accelz, float dt){
-
-  dt = dt / 1000000; //convert microseconds to seconds.
-
-  currentState.accel[0] = accelx;
-  currentState.accel[1] = accely;
-  currentState.accel[2] = accelz;
-
-  currentState.vel[0] += currentState.accel[0] * dt;
-  currentState.vel[1] += (currentState.accel[1] - G) * dt;
-  currentState.vel[2] += currentState.accel[2] * dt;
-
-  currentState.pos[0] += currentState.vel[0] * dt;
-  currentState.pos[1] += currentState.vel[1] * dt;
-  currentState.pos[2] += currentState.vel[2] * dt;
 }
 
 float kalmanAlt(){
