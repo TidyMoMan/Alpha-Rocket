@@ -28,7 +28,7 @@
 #define STATUS_LED_PIN 14
 #define SD_CS_PIN 17 //SD module chip select
 
-#define DEBUG 0 //1 means debug mode is ON
+#define DEBUG 0 //1 means debug mode is ON 2 means dump mode is enabled
 
 void updateState(float, float, float, float);
 float kalmanAlt();
@@ -123,10 +123,6 @@ void setup(void)
     Serial.println("Failed to find SD card\n");
     delay(1000);
   }
-  
-  File dataFile = SD.open("datalog.txt", FILE_WRITE);
-  dataFile.println(" --- init success! --- ");
-  dataFile.close();
 
   Serial.println("\nInit success\n");
 
@@ -170,10 +166,41 @@ void loop(void)
   if((linearaccel.acceleration.y < DESCENT_THRESHOLD && HA_accel.acceleration.y < DESCENT_THRESHOLD) && flightPhase == 2){flightPhase = 3;} //descent detection
   //if(false){flightPhase = 4;} //landing detection
 
+  if(DEBUG == 2){ //data dump mode
+    File dataFile = SD.open("datalog.dat", O_READ);
+    while(1){
+      if(dataFile.available() && Serial){
+
+        logFrame dumpFrame;
+
+        dataFile.read((uint8_t*)&dumpFrame, sizeof(dumpFrame));
+
+        // Serial.print(dataFile.size()); Serial.print(" "); //useful for debug
+        // Serial.print(dataFile.position()); Serial.print(" ");
+        
+        Serial.print(dumpFrame.time); Serial.print(",");
+
+        Serial.print(dumpFrame.xAccel); Serial.print(",");
+        Serial.print(dumpFrame.yAccel); Serial.print(",");
+        Serial.print(dumpFrame.zAccel); Serial.print(",");
+
+        Serial.print(dumpFrame.xRot); Serial.print(",");
+        Serial.print(dumpFrame.yRot); Serial.print(",");
+        Serial.print(dumpFrame.zRot); Serial.print(",");
+
+        Serial.print(dumpFrame.temp); Serial.print(",");
+        Serial.print(dumpFrame.press); Serial.print(",");
+        Serial.println(dumpFrame.phase);
+
+        //dataFile.seek(dataFile.position() + sizeof(logFrame)); //not needed (i am stupid sometimes)
+      }
+    }
+  }
+
   /*logging, much room for improvement here*/
   if(!DEBUG){
 
-    //File dataFile = SD.open("datalog.txt", O_CREAT | O_WRITE);
+    //File dataFile = SD.open("datalog.dat", O_CREAT | O_WRITE);
 
 
     //timestamp
@@ -193,7 +220,7 @@ void loop(void)
     // dataFile.println(flightPhase);
 
     // dataFile.close();
-    
+
     thisFrame.time = millis();
 
     thisFrame.xAccel = linearaccel.acceleration.x;
@@ -215,7 +242,7 @@ void loop(void)
     if(logCount == 100){ //only write to card every 100th loop so we don't need to call file.open and file.close every single loop. this should speed up loops (in theory) because there are less file open and close calls
       logCount = 0;
 
-      File dataFile = SD.open("datalog.txt", O_CREAT | O_WRITE);
+      File dataFile = SD.open("datalog.dat", O_CREAT | O_APPEND | O_WRITE);
 
       for(int i = 0; i < 100; i++){
         thisFrame = logBuff[i];
@@ -278,7 +305,7 @@ void loop(void)
 
   /*baro measurements*/
   Serial.print(">Pressure:");
-  Serial.print(pressure_event.pressure);
+  Serial.print(pressure_event.pressure); 
   Serial.print("hPa\n");
 
   Serial.print(">Baro Temp:");
