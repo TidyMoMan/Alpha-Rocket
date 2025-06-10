@@ -61,12 +61,14 @@ logFrame logBuff[101];
 
 float initialAlt;
 
-int flightPhase = 2;
-/*0 = on pad
-  1 = powered flight
-  2 = coasting
-  3 = descent (hopefully this is when the parachute opens...)
-  4 = landed.*/
+enum flightPhase{
+  POWERED,
+  COASTING,
+  DESCENDING,
+  LANDED
+};
+
+enum flightPhase currentPhase  = COASTING; //change as needed lul
 
 unsigned long current = 0;
 unsigned long last = 0;
@@ -156,15 +158,15 @@ void loop(void)
   baro.getEvents(&temp_event, &pressure_event);
 
   /*abort logic*/
-  if(flightPhase == 3){ //if(flightPhase == 3 || (abs(HA_accel.acceleration.x) > ABORT_THRESHOLD || abs(HA_accel.acceleration.z) > ABORT_THRESHOLD) || (abs(linearaccel.acceleration.x) > ABORT_THRESHOLD || abs(linearaccel.acceleration.z) > ABORT_THRESHOLD)){
+  if(currentPhase == DESCENDING){ //if(flightPhase == 3 || (abs(HA_accel.acceleration.x) > ABORT_THRESHOLD || abs(HA_accel.acceleration.z) > ABORT_THRESHOLD) || (abs(linearaccel.acceleration.x) > ABORT_THRESHOLD || abs(linearaccel.acceleration.z) > ABORT_THRESHOLD)){
     deployChute();
   }
 
   /*flight phase logic*/
-  if((linearaccel.acceleration.y > TAKEOFF_THRESHOLD && HA_accel.acceleration.y > TAKEOFF_THRESHOLD) && flightPhase == 0){flightPhase = 1;} //takeoff detection
-  if((linearaccel.acceleration.y > COAST_THRESHOLD && HA_accel.acceleration.y > COAST_THRESHOLD) && flightPhase == 1){flightPhase = 2;} //coast detection
-  if((linearaccel.acceleration.y < DESCENT_THRESHOLD && HA_accel.acceleration.y < DESCENT_THRESHOLD) && flightPhase == 2){flightPhase = 3;} //descent detection
-  //if(false){flightPhase = 4;} //landing detection
+  //if((linearaccel.acceleration.y > TAKEOFF_THRESHOLD && HA_accel.acceleration.y > TAKEOFF_THRESHOLD) && currentPhase == POWERED){flightPhase = 1;} //takeoff detection
+  if((linearaccel.acceleration.y > COAST_THRESHOLD && HA_accel.acceleration.y > COAST_THRESHOLD) && currentPhase == POWERED){currentPhase = COASTING;} //coast detection
+  if((linearaccel.acceleration.y < DESCENT_THRESHOLD && HA_accel.acceleration.y < DESCENT_THRESHOLD) && currentPhase == COASTING){currentPhase = DESCENDING;} //descent detection
+
 
   if(DEBUG == 2){ //data dump mode
     File dataFile = SD.open("datalog.dat", O_READ);
@@ -233,7 +235,7 @@ void loop(void)
 
     thisFrame.temp = temp_event.temperature;
     thisFrame.press = pressure_event.pressure;
-    thisFrame.phase = flightPhase;
+    thisFrame.phase = currentPhase;
 
     logBuff[logCount] = thisFrame;
 
@@ -257,7 +259,7 @@ void loop(void)
   /*prints*/
   if(DEBUG){
   Serial.print(">Flight Phase:");
-  Serial.print(flightPhase);
+  Serial.print(currentPhase);
   Serial.print("\n");
 
   Serial.print(">Gyro Temp:");
@@ -320,6 +322,7 @@ float kalmanAlt(){
   int baroAlt = baro.readAltitude() - initialAlt;
   return 0.0;
 }
+
 
 void deployChute(){
   if(triggerCount < 4){ //don't toggle the servo more than 4 times, end with servo in closed position to reduce strain
