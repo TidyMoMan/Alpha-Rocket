@@ -13,10 +13,13 @@
 
 //all thresholds are m/s^2
 #define G 9.80665
-#define TAKEOFF_THRESHOLD 20
+#define TAKEOFF_THRESHOLD 15
 #define COAST_THRESHOLD 10
 #define DESCENT_THRESHOLD 1
 #define ABORT_THRESHOLD 10 //non-spinal accel
+
+#define BARO_SIGNIFICANT_THRESHOLD 10 //meters up or down before baro measurement is significant enough to change the vehicle state
+float baro_lowest_measure = 99999;
 
 #define _PWM_LOGLEVEL_ 3
 #define SERVO_PIN 15
@@ -62,6 +65,7 @@ logFrame logBuff[101];
 float initialAlt;
 
 enum flightPhase{
+  PAD,
   POWERED,
   COASTING,
   DESCENDING,
@@ -157,16 +161,19 @@ void loop(void)
   gyro.getEvent(&linearaccel, &angleaccel, &temp);
   baro.getEvents(&temp_event, &pressure_event);
 
-  /*abort logic*/
-  if(currentPhase == DESCENDING){ //if(flightPhase == 3 || (abs(HA_accel.acceleration.x) > ABORT_THRESHOLD || abs(HA_accel.acceleration.z) > ABORT_THRESHOLD) || (abs(linearaccel.acceleration.x) > ABORT_THRESHOLD || abs(linearaccel.acceleration.z) > ABORT_THRESHOLD)){
+  /*parachute deployment logic*/
+  if(currentPhase == DESCENDING || (abs(HA_accel.acceleration.x) > ABORT_THRESHOLD || abs(HA_accel.acceleration.z) > ABORT_THRESHOLD) || (abs(linearaccel.acceleration.x) > ABORT_THRESHOLD || abs(linearaccel.acceleration.z) > ABORT_THRESHOLD)){
     deployChute();
   }
 
   /*flight phase logic*/
-  //if((linearaccel.acceleration.y > TAKEOFF_THRESHOLD && HA_accel.acceleration.y > TAKEOFF_THRESHOLD) && currentPhase == POWERED){flightPhase = 1;} //takeoff detection
-  if((linearaccel.acceleration.y > COAST_THRESHOLD && HA_accel.acceleration.y > COAST_THRESHOLD) && currentPhase == POWERED){currentPhase = COASTING;} //coast detection
-  if((linearaccel.acceleration.y < DESCENT_THRESHOLD && HA_accel.acceleration.y < DESCENT_THRESHOLD) && currentPhase == COASTING){currentPhase = DESCENDING;} //descent detection
+  if((linearaccel.acceleration.y > TAKEOFF_THRESHOLD || HA_accel.acceleration.y > TAKEOFF_THRESHOLD) && currentPhase == PAD){currentPhase = POWERED;} //takeoff detection
+  if((linearaccel.acceleration.y > COAST_THRESHOLD || HA_accel.acceleration.y > COAST_THRESHOLD) && currentPhase == POWERED){currentPhase = COASTING;} //coast detection
+  if((linearaccel.acceleration.y < DESCENT_THRESHOLD || HA_accel.acceleration.y < DESCENT_THRESHOLD) && currentPhase == COASTING){currentPhase = DESCENDING;} //descent detection
 
+  /*barometer descend override*/
+  if(pressure_event.pressure < baro_lowest_measure){baro_lowest_measure = pressure_event.pressure;}
+  if(pressure_event.pressure > baro_lowest_measure + BARO_SIGNIFICANT_THRESHOLD && currentPhase != PAD){currentPhase = DESCENDING;} //deploy if descending and past pad phase
 
   if(DEBUG == 2){ //data dump mode
     File dataFile = SD.open("datalog.dat", O_READ);
